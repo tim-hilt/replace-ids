@@ -2,7 +2,7 @@
 
 import os
 import re
-from subprocess import run, getoutput
+from subprocess import getoutput
 from pathlib import Path
 import logging
 from enum import Enum
@@ -10,7 +10,7 @@ from typing import Final, TypedDict
 
 from args import parse_args
 from choice import get_selection
-from utils import findall
+from utils import edit
 
 
 class DelimiterDefinition(TypedDict):
@@ -24,7 +24,7 @@ class Delimiters(TypedDict):
 
 
 SEARCH_STRING: Final = "'\\bid='"
-DELIMITERS: Final(Delimiters) = {"string": {"opening": "\"", "closing": "\""},
+DELIMITERS: Final[Delimiters] = {"string": {"opening": "\"", "closing": "\""},
                                  "curly_string": {"opening": "{\"", "closing": "\"}"}}
 
 
@@ -39,7 +39,7 @@ def process_output(output: list([str])):
     for match in output.split("\n"):
         file_with_pos, code = match.split(" ", 1)
         file, line, col, *_ = file_with_pos.split(":")
-        if not file in matches:
+        if file not in matches:
             matches[file]: list([Match]) = []
         matches[file].append({"match": code, "line": line, "col": col})
     return matches
@@ -60,41 +60,16 @@ class MatchType(Enum):
 def get_match_type(match: str) -> MatchType:
     id_substr = match[match.find("id="):]
     after_id = id_substr[3:]
-    if after_id.startswith(DELIMITERS["string"]["opening_delimiter"]):
+    if after_id.startswith(DELIMITERS["string"]["opening"]):
         return MatchType.STRING
-    elif after_id.startswith(DELIMITERS["curly_string"]["opening_delimiter"]):
+    elif after_id.startswith(DELIMITERS["curly_string"]["opening"]):
         return MatchType.CURLY_STRING
     return MatchType.VARIABLE
 
 
-def edit_src(file: str, line: str, col: str):
-    cmd = f"nvim {file}:{line}:{col}"
-    run(cmd)
-
-
-def process_file(file: Path, matches: list([Match])):
-    logging.info(f"Processing file {file}")
-    for match in matches:
-        # TODO: DRY! match["match"]
-        print(match["match"])
-        match_type = get_match_type(match["match"])
-        match match_type:
-            case MatchType.VARIABLE:
-                edit_src(file, match["line"], match["col"])
-                continue
-            case MatchType.STRING:
-                formatted_match = format_string_match(match["match"])
-            case MatchType.CURLY_STRING:
-                formatted_match = format_curly_string_match(match["match"])
-        suggestion = get_suggestion(formatted_match)
-        print(f"Suggestion: {formatted_match} -> {suggestion}")
-        # sel = get_selection()
-
-
 def format_string_match(match: str) -> str:
-    id_substr = match[match.find("id="):]
-    after_id = id_substr[3:]
-    delim = DELIMITERS["string"]["opening_delimiter"]
+    after_id = match[match.find("id=") + 4:]
+    delim = DELIMITERS["string"]["opening"]
     start = len(delim)
     end = after_id.find(delim, start + 1)
     return after_id[start:end]
@@ -103,11 +78,30 @@ def format_string_match(match: str) -> str:
 def format_curly_string_match(match: str) -> str:
     id_substr = match[match.find("id="):]
     after_id = id_substr[3:]
-    opening_delim = DELIMITERS["curly_string"]["opening_delimiter"]
+    opening_delim = DELIMITERS["curly_string"]["opening"]
     start = len(opening_delim)
-    closing_delim = DELIMITERS["curly_string"]["closing_delimiter"]
+    closing_delim = DELIMITERS["curly_string"]["closing"]
     end = after_id.find(closing_delim, start + 1)
     return after_id[start:end]
+
+
+def process_file(file: Path, matches: list([Match])):
+    logging.info(f"Processing file {file}")
+    for match in matches:
+        code = match["match"]
+        print(code)
+        match_type = get_match_type(code)
+        match match_type:
+            case MatchType.VARIABLE:
+                edit(file, match["line"], match["col"])
+                continue
+            case MatchType.STRING:
+                formatted_match = format_string_match(code)
+            case MatchType.CURLY_STRING:
+                formatted_match = format_curly_string_match(code)
+        suggestion = get_suggestion(formatted_match)
+        print(f"Suggestion: {formatted_match} -> {suggestion}")
+        sel = get_selection()
 
 
 def get_suggestion(match: str) -> str:

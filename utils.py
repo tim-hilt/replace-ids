@@ -1,9 +1,13 @@
 from pathlib import Path
-from subprocess import getoutput
 import sys
 import tty
 import termios
-import re
+from subprocess import run
+
+
+def edit(file: Path, line: str, col: str, offset: int = 4):
+    cmd = ["nvim", f"{file}:{line}:{int(col)+offset}"]
+    run(cmd)
 
 
 def get_char() -> str:
@@ -15,7 +19,3 @@ def get_char() -> str:
     finally:
         termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
     return ch
-
-
-def findall(p, s):
-    return [m.start() for m in re.finditer(p, s)]

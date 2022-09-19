@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import fileinput
 import os
 import re
 from subprocess import getoutput
@@ -9,7 +10,7 @@ from enum import Enum
 from typing import Final, TypedDict
 
 from args import parse_args
-from choice import get_selection
+from choice import Choice, get_selection
 from utils import edit
 
 
@@ -30,8 +31,8 @@ DELIMITERS: Final[Delimiters] = {"string": {"opening": "\"", "closing": "\""},
 
 class Match(TypedDict):
     match: str
-    line: str
-    col: str
+    line: int
+    col: int
 
 
 def process_output(output: list([str])):
@@ -41,7 +42,8 @@ def process_output(output: list([str])):
         file, line, col, *_ = file_with_pos.split(":")
         if file not in matches:
             matches[file]: list([Match]) = []
-        matches[file].append({"match": code, "line": line, "col": col})
+        matches[file].append(
+            {"match": code, "line": int(line), "col": int(col)})
     return matches
 
 
@@ -67,22 +69,14 @@ def get_match_type(match: str) -> MatchType:
     return MatchType.VARIABLE
 
 
-def format_string_match(match: str) -> str:
-    after_id = match[match.find("id=") + 4:]
-    delim = DELIMITERS["string"]["opening"]
-    start = len(delim)
-    end = after_id.find(delim, start + 1)
-    return after_id[start:end]
-
-
-def format_curly_string_match(match: str) -> str:
-    id_substr = match[match.find("id="):]
-    after_id = id_substr[3:]
-    opening_delim = DELIMITERS["curly_string"]["opening"]
-    start = len(opening_delim)
-    closing_delim = DELIMITERS["curly_string"]["closing"]
-    end = after_id.find(closing_delim, start + 1)
-    return after_id[start:end]
+def find_id(line: str, match_type: MatchType) -> tuple[int, int]:
+    match match_type:
+        case MatchType.CURLY_STRING:
+            p = re.compile('id={"([^"]+)')
+        case MatchType.STRING:
+            p = re.compile('id="([^"]+)')
+    m = p.search(line)
+    return m.span(1)
 
 
 def process_file(file: Path, matches: list([Match])):
@@ -93,15 +87,32 @@ def process_file(file: Path, matches: list([Match])):
         match_type = get_match_type(code)
         match match_type:
             case MatchType.VARIABLE:
-                edit(file, match["line"], match["col"])
+                col_offset = 4
+                edit(file, match["line"], match["col"] + col_offset)
                 continue
             case MatchType.STRING:
-                formatted_match = format_string_match(code)
+                start, end = find_id(code, MatchType.STRING)
             case MatchType.CURLY_STRING:
-                formatted_match = format_curly_string_match(code)
-        suggestion = get_suggestion(formatted_match)
-        print(f"Suggestion: {formatted_match} -> {suggestion}")
+                start, end = find_id(code, MatchType.CURLY_STRING)
+        curr_id = code[start:end]
+        suggested_id = get_suggestion(curr_id)
+        print(f"Suggestion: {curr_id} -> {suggested_id}")
         sel = get_selection()
+
+        match sel:
+            case Choice.SKIP:
+                continue
+            case Choice.EDIT:
+                edit(file, match["line"], match["col"])
+            case Choice.YES:
+                accept_suggestion(
+                    file, match["line"], start, end, suggested_id)
+
+
+def accept_suggestion(file: Path, line_num: int, start: int, end: int, suggestion: str):
+    for num, line in enumerate(fileinput.input(file, inplace=True)):
+        if num == line_num:
+            print(f"{line[:start]}{suggestion}{line[end + 1:]}")
 
 
 def get_suggestion(match: str) -> str:

@@ -5,8 +5,8 @@ import termios
 from subprocess import run
 
 
-def edit(file: Path, line: str, col: str, offset: int = 4):
-    cmd = ["nvim", f"{file}:{line}:{int(col)+offset}"]
+def edit(file: Path, line: int, col: int):
+    cmd = ["nvim", f"{file}:{line}:{col}"]
     run(cmd)
 
 

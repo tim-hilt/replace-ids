@@ -6,7 +6,7 @@ from subprocess import run
 
 
 def edit(file: Path, line: int, col: int):
-    cmd = ["nvim", f"{file}:{line}:{col}"]
+    cmd = ["nvim", f"+call cursor({line}, {col})", file.absolute()]
     run(cmd)
 
 

@@ -39,6 +39,7 @@ def get_matches():
     for match in out.split("\n"):
         file_with_pos, code = match.split(" ", 1)
         file, line, col, *_ = file_with_pos.split(":")
+        file = Path(file)
         if file not in matches:
             matches[file]: list([Match]) = []
         matches[file].append(
@@ -99,10 +100,8 @@ def process_file(file: Path, matches: list([Match])):
                 edit(file, match["line"], match["col"] + col_offset)
                 continue
             case MatchType.STRING:
-                print(code)
                 start, end = find_id(code, MatchType.STRING)
             case MatchType.CURLY_STRING:
-                print(code)
                 start, end = find_id(code, MatchType.CURLY_STRING)
         curr_id = code[start:end]
         suggested_id = get_suggestion(curr_id)
@@ -110,6 +109,7 @@ def process_file(file: Path, matches: list([Match])):
         if curr_id == suggested_id:
             continue
 
+        print(code)
         print(f"Suggestion: {curr_id} -> {suggested_id}")
         sel = get_selection()
 
@@ -121,3 +121,5 @@ def process_file(file: Path, matches: list([Match])):
             case Choice.YES:
                 accept_suggestion(
                     file, match["line"], start, end, suggested_id)
+
+        print()

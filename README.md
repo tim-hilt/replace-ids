@@ -7,3 +7,9 @@ This utility exists to replace malformatted ids with the currently recommended f
 - Python 3.10
 - Ripgrep
 - Neovim
+
+## Usage
+
+```bash
+python main.py /path/to/source
+```
